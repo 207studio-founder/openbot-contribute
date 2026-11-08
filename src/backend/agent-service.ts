@@ -5629,8 +5629,14 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
     const snapshot = this.#conversation.snapshotToUpdate(agent.id);
     if (!snapshot || snapshot.threadId !== sent.threadId) return;
     const handled = decision ? yield* this.#applySurfaceDecision(snapshot, deliveryId, busyTurnId, decision) : false;
-    if (!handled && this.#mailbox.getDelivery(deliveryId)?.delivery.status === "queued")
-      yield* this.#steerWhenBusy(agent, null, snapshot, deliveryId, true);
+    if (handled || this.#mailbox.getDelivery(deliveryId)?.delivery.status !== "queued") return;
+    const steer = yield* this.#steerWhenBusy(agent, null, snapshot, deliveryId, true);
+    if (decision?.action !== "wait") return;
+    // After the steer: a steer moves the message to its own time, and a stored row keeps its first one.
+    if (steer) yield* Fiber.join(steer);
+    const delivery = this.#mailbox.getDelivery(deliveryId)?.delivery;
+    if (delivery?.status === "queued" || delivery?.status === "running")
+      this.#postSurfaceLine(snapshot, deliveryId, decision.text, true, delivery.turnId);
   });
 
   /** The small model's choice, or null when it failed or came too late. */
@@ -5691,6 +5697,26 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
     return response === null ? null : parseSurfaceDecision(response, situation);
   });
 
+  #postSurfaceLine(
+    snapshot: ConversationSnapshot,
+    deliveryId: string,
+    text: string,
+    commentary: boolean,
+    turnId: string | null,
+  ): void {
+    snapshot.messages.push({
+      id: surfaceLineId(deliveryId),
+      author: "assistant",
+      source: "assistant",
+      text,
+      status: "completed",
+      createdAt: new Date().toISOString(),
+      ...(turnId ? { turnId } : {}),
+      ...(commentary ? { itemType: "commentary" } : {}),
+    });
+    this.#conversation.emitConversation(snapshot, "conversation.surface-reply", { deliveryId });
+  }
+
   /** Posts the reply. True when the message needs no steer: it was ended or has moved to a task. */
   readonly #applySurfaceDecision = Effect.fn("AgentService.applySurfaceDecision")(function* (
     this: AgentService,
@@ -5703,19 +5729,8 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
     const delivery = this.#mailbox.getDelivery(deliveryId)?.delivery;
     if (!delivery) return false;
     const queued = delivery.status === "queued";
-    const post = (text: string, commentary: boolean, turnId: string | null) => {
-      snapshot.messages.push({
-        id: surfaceLineId(deliveryId),
-        author: "assistant",
-        source: "assistant",
-        text,
-        status: "completed",
-        createdAt: new Date().toISOString(),
-        ...(turnId ? { turnId } : {}),
-        ...(commentary ? { itemType: "commentary" } : {}),
-      });
-      this.#conversation.emitConversation(snapshot, "conversation.surface-reply", { deliveryId });
-    };
+    const post = (text: string, commentary: boolean, turnId: string | null) =>
+      this.#postSurfaceLine(snapshot, deliveryId, text, commentary, turnId);
     switch (decision.action) {
       case "none":
         return false;
@@ -5753,7 +5768,6 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
         return moved;
       }
       case "wait":
-        if (queued) post(decision.text, true, delivery.turnId);
         return false;
       case "ack": {
         const terminal =
@@ -5804,9 +5818,13 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
     // Not awaited: the message is already queued, and the sender is answered without the wait for
     // the provider.
     else
-      yield* this.#steerSentMessage(agent, snapshot.threadId ?? agent.threadId, deliveryId, steerTurnId, explain).pipe(
-        Effect.forkIn(this.#scope),
-      );
+      return yield* this.#steerSentMessage(
+        agent,
+        snapshot.threadId ?? agent.threadId,
+        deliveryId,
+        steerTurnId,
+        explain,
+      ).pipe(Effect.forkIn(this.#scope));
   });
 
   /**
@@ -5820,7 +5838,7 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
     const snapshot = this.#conversation.snapshotToUpdate(recipientAgentId);
     if (!agent || !snapshot || this.#store.isHidden(agent.id) || !this.#mailbox.steersChatTurn(deliveryId))
       return Effect.void;
-    return this.#steerWhenBusy(agent, null, snapshot, deliveryId, false);
+    return this.#steerWhenBusy(agent, null, snapshot, deliveryId, false).pipe(Effect.asVoid);
   }
 
   /**
