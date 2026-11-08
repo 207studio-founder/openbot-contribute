@@ -230,6 +230,9 @@ export const messages = {
     "チャットが長くなったときに、エージェントが新しいチャットを開始できます。開始前にメモを保存します。",
   "agentSettings.quickAcknowledgement.title": "長いタスクの前に計画を表示",
   "agentSettings.quickAcknowledgement.description": "長いタスクの前に、エージェントが計画を表示します。",
+  "agentSettings.surfaceReplies.title": "作業中もすぐに返答",
+  "agentSettings.surfaceReplies.description":
+    "小さなモデルがメッセージにすぐ返答し、エージェントの作業中は短い質問に答えます。",
   "agentSettings.browserProfile.label": "ブラウザープロファイル",
   "agentSettings.browserProfile.shared": "共有",
   "agentSettings.browserProfile.agent": "このエージェントのみ",

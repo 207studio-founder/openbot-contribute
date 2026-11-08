@@ -235,6 +235,8 @@ export const messages = {
   "agentSettings.agentNewChat.description": "לאפשר לסוכן להתחיל צ'אט חדש כשהצ'אט שלו מתארך. קודם הוא שומר הערות.",
   "agentSettings.quickAcknowledgement.title": "הצגת התוכנית לפני משימות ארוכות",
   "agentSettings.quickAcknowledgement.description": "לפני משימה ארוכה, הסוכן מציג את התוכנית שלו.",
+  "agentSettings.surfaceReplies.title": "מענה מהיר בזמן עבודה",
+  "agentSettings.surfaceReplies.description": "מודל קטן מגיב מיד להודעות ועונה על שאלות קצרות בזמן שהסוכן עובד.",
   "agentSettings.browserProfile.label": "פרופיל דפדפן",
   "agentSettings.browserProfile.shared": "משותף",
   "agentSettings.browserProfile.agent": "רק הסוכן הזה",

@@ -268,6 +268,9 @@ export const messages = {
     "Agent może rozpocząć nowy czat, gdy jego czat staje się długi. Najpierw zapisuje notatki.",
   "agentSettings.quickAcknowledgement.title": "Pokaż plan przed długimi zadaniami",
   "agentSettings.quickAcknowledgement.description": "Przed długim zadaniem agent pokazuje swój plan.",
+  "agentSettings.surfaceReplies.title": "Szybkie odpowiedzi w trakcie pracy",
+  "agentSettings.surfaceReplies.description":
+    "Mały model od razu reaguje na wiadomości i odpowiada na krótkie pytania, gdy agent pracuje.",
   "agentSettings.browserProfile.label": "Profil przeglądarki",
   "agentSettings.browserProfile.shared": "Wspólny",
   "agentSettings.browserProfile.agent": "Tylko ten agent",

@@ -10,6 +10,7 @@ import {
   agentAutomationAllowed,
   agentComputerUseEnabled,
   agentQuickAcknowledgementEnabled,
+  agentSurfaceRepliesEnabled,
   decodeSaveAgentProfileResult,
   workspaceAccessEnforced,
 } from "@openbot/contracts/ipc";
@@ -177,6 +178,8 @@ export function standingProfileChanged(
     (previous.excludedFolders ?? []).join("\n") !== (agent.excludedFolders ?? []).join("\n") ||
     agentComputerUseEnabled(previous) !== agentComputerUseEnabled(agent) ||
     agentAutomationAllowed(previous, previousDefaults) !== agentAutomationAllowed(agent, defaults) ||
-    agentQuickAcknowledgementEnabled(previous, previousDefaults) !== agentQuickAcknowledgementEnabled(agent, defaults)
+    agentQuickAcknowledgementEnabled(previous, previousDefaults) !==
+      agentQuickAcknowledgementEnabled(agent, defaults) ||
+    agentSurfaceRepliesEnabled(previous, previousDefaults) !== agentSurfaceRepliesEnabled(agent, defaults)
   );
 }

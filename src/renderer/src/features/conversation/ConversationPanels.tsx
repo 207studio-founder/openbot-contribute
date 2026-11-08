@@ -661,6 +661,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
               busyMessageDefaultIsHost={props.server?.kind === "remote"}
               newChatEditable={props.server?.kind === "local" || props.remoteNewChatLoaded === true}
               quickAcknowledgementEditable={props.server?.kind === "local" || props.remotePlanCardLoaded === true}
+              surfaceRepliesEditable={props.server?.kind === "local"}
               // The same Fast state and switch as the model picker of the chat header.
               fastMode={fastMode()}
               onFastModeChange={fastModeChange()}

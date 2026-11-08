@@ -630,6 +630,28 @@ change, because the remote client cannot see it. The channel threads of the agen
 (`ChannelStore.contextThreadsForAgent`) are retired too, and their work steps are saved. A channel
 turn also carries its own self-contained context packet. The instance transfer file keeps `taskLimit`.
 
+### Quick replies
+
+An agent with the `surfaceReplies` setting (per agent and account default, off by default) gives a
+short text message from the person to a tool-less generation on its background model before the
+message takes the normal path (`src/backend/agent/surface-reply.ts`). The generation has 8 seconds
+and chooses one action:
+
+| The agent | Action | Result |
+| --- | --- | --- |
+| Works | `answer` | The delivery completes in the running turn, and the answer joins that turn. |
+| Works | `task` | The message moves to a task beside the running turn (when one can start). |
+| Works | `wait` | A commentary line says the message waits, and it steers or queues as usual. |
+| Idle | `ack` | A commentary line shows while the turn starts. The turn does not wait for it. |
+| Idle | `none` | Nothing is shown. |
+
+A timeout, a failed generation or a reply in the wrong shape shows nothing and leaves the message on
+its normal path. A slash command, an attachment, a voice draft, a reply to a message or an open
+question card skips the generation. The line has the id `surface-<deliveryId>` and follows the
+message into its turn (`MailboxSync.syncDeliveryMessage`). The agent's own session does not see an
+`answer`, so the next message from the person carries it, once, in an `<openbot_quick_replies>`
+block of its own that history readers filter out.
+
 ## Deleted chat messages
 
 `AgentService.deleteConversationMessage` (`src/backend/agent/message-deletion.ts`) deletes one shown

@@ -25,6 +25,7 @@ import {
   agentPermissionLevels,
   agentPermissionUpdate,
   agentQuickAcknowledgementEnabled,
+  agentSurfaceRepliesEnabled,
   type BusyMessageMode,
   type ClientAgentModelOption,
   type CustomAgentSummary,
@@ -149,6 +150,8 @@ export interface AgentSettingsPanelProps {
   newChatEditable?: boolean;
   /** Whether the agent shows its plan before a long task. Local-only: the Team API does not carry it. */
   quickAcknowledgementEditable?: boolean;
+  /** Whether a small model replies at once. Local-only: no host route carries it. */
+  surfaceRepliesEditable?: boolean;
   /** Fast mode, as the model picker of the chat header shows it. */
   fastMode?: boolean | undefined;
   /** Without it, the model picker shows no Fast switch. The picker shows it only for a model with a fast tier. */
@@ -289,6 +292,7 @@ interface AgentSettingsDraft {
   allowAutomation: boolean;
   allowNewChat: boolean;
   quickAcknowledgement: boolean;
+  surfaceReplies: boolean;
   browserProfile: BrowserProfileChoice;
   /** `default` follows the app setting. */
   busyMessage: BusyMessageChoice;
@@ -331,6 +335,7 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     allowAutomation: false,
     allowNewChat: false,
     quickAcknowledgement: false,
+    surfaceReplies: false,
     browserProfile: "shared",
     busyMessage: "default",
     taskLimit: "default",
@@ -488,6 +493,7 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           String(agentAutomationAllowed(agent, agentDefaults())),
           String(agentNewChatAllowed(agent, agentDefaults())),
           String(agentQuickAcknowledgementEnabled(agent, agentDefaults())),
+          String(agentSurfaceRepliesEnabled(agent, agentDefaults())),
           browserProfile,
           agent.busyMessageMode ?? "default",
           String(agent.taskLimit ?? "default"),
@@ -533,6 +539,7 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           state.allowAutomation = agentAutomationAllowed(agent, agentDefaults());
           state.allowNewChat = agentNewChatAllowed(agent, agentDefaults());
           state.quickAcknowledgement = agentQuickAcknowledgementEnabled(agent, agentDefaults());
+          state.surfaceReplies = agentSurfaceRepliesEnabled(agent, agentDefaults());
           state.browserProfile = browserProfile;
           state.busyMessage = agent.busyMessageMode ?? "default";
           state.taskLimit = taskLimitChoice(agent.taskLimit);
@@ -1016,6 +1023,19 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     if (!disposed && props.agent.id === agentId && draft.quickAcknowledgement === next) {
       setDraft((state) => {
         state.quickAcknowledgement = !next;
+      });
+    }
+  }
+
+  async function saveSurfaceReplies(next: boolean): Promise<void> {
+    const agentId = props.agent.id;
+    setDraft((state) => {
+      state.surfaceReplies = next;
+    });
+    if (await saveAgentPatch({ surfaceReplies: next }, agentId)) return;
+    if (!disposed && props.agent.id === agentId && draft.surfaceReplies === next) {
+      setDraft((state) => {
+        state.surfaceReplies = !next;
       });
     }
   }
@@ -1708,6 +1728,20 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                     aria-label={t("agentSettings.quickAcknowledgement.title")}
                     checked={draft.quickAcknowledgement}
                     onChange={(next) => void saveQuickAcknowledgement(next)}
+                  />
+                </div>
+              </Show>
+              <Show when={props.surfaceRepliesEditable}>
+                <div class="agent-settings-notifications">
+                  <div>
+                    <strong>{t("agentSettings.surfaceReplies.title")}</strong>
+                    <span>{t("agentSettings.surfaceReplies.description")}</span>
+                  </div>
+                  <Switch
+                    size="sm"
+                    aria-label={t("agentSettings.surfaceReplies.title")}
+                    checked={draft.surfaceReplies}
+                    onChange={(next) => void saveSurfaceReplies(next)}
                   />
                 </div>
               </Show>

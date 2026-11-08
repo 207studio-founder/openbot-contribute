@@ -121,6 +121,7 @@ import {
   agentAutomationAllowed,
   agentBrowserProfile,
   agentNewChatAllowed,
+  agentSurfaceRepliesEnabled,
   agentTaskLimit,
   type BusyMessageMode,
   CONTEXT_RESET_ITEM_TYPE,
@@ -132,6 +133,7 @@ import {
   isCustomProviderHarness,
   MODEL_SWITCH_ITEM_TYPES,
   type ModelSwitchReason,
+  type QueueDelivery,
   type QueueSteerFallback,
   type ResponseStyle,
   sameAgentBrowserProfile,
@@ -147,7 +149,7 @@ import type { QueueEditRequest } from "@openbot/contracts/team-protocol/queue-ed
 import { sourceText } from "@openbot/i18n/source";
 import { createOpenBotLogger } from "@openbot/logging";
 import { classifyFailure } from "@openbot/telemetry";
-import { Cause, Deferred, Effect, Exit, Fiber, Result, Schema, Scope, Semaphore } from "effect";
+import { Cause, Deferred, Effect, Exit, Fiber, Option, Result, Schema, Scope, Semaphore } from "effect";
 import { AgentMemories } from "./agent/agent-memories";
 import { AgentRemoval, AgentRemovalFailed } from "./agent/agent-removal";
 import { AgentSettingsRefused } from "./agent/agent-settings-refused";
@@ -218,6 +220,17 @@ import { SessionSettings } from "./agent/session-settings";
 import { SIDE_QUESTION_CHAT_MESSAGES, sideQuestionPrompt } from "./agent/side-question";
 import type { AgentSidebar } from "./agent/sidebar-tools";
 import type { LocalSkillTools } from "./agent/skill-tools";
+import {
+  parseSurfaceDecision,
+  runningWorkStatus,
+  SURFACE_MESSAGE_CHARACTERS,
+  SURFACE_REPLY_TIMEOUT_MS,
+  type SurfaceDecision,
+  SurfaceNotes,
+  type SurfaceSituation,
+  surfaceLineId,
+  surfaceReplyPrompt,
+} from "./agent/surface-reply";
 import {
   agentProviderAccount,
   isRequestTimeout,
@@ -480,6 +493,7 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
   readonly messaging: MessagingThreads;
   readonly #profileSave: ProfileSave;
   readonly #profileClients = new ProfileClients();
+  readonly #surfaceNotes = new SurfaceNotes();
   readonly #warmGenerations = new WarmGenerations({
     ownerFor: (provider) => this.#providers.currentClient(provider),
     createClient: (provider) => this.#providers.createProfileClient(provider),
@@ -1482,6 +1496,7 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
       usageLimits: this.#usageLimits,
       planContinuation: this.#planContinuation,
       tasks: this.#tasks,
+      surfaceNotes: this.#surfaceNotes,
       hooks: {
         emitError: (code, error, agentId) => this.#emitError(code, error, agentId),
         redactMcp: (text) => this.#mcp.redact(text),
@@ -5518,7 +5533,10 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
             Effect.sync(() => this.#emitError("message_preview_failed", failure.cause, agent.id)),
           ),
         );
-    yield* this.#steerWhenBusy(agent, task, snapshot, delivery.delivery.id, true);
+    // A quick reply decides first, and takes the message on to the same steer when it does not end it.
+    if (!task && this.#surfaceApplies(agent, input, delivery.delivery))
+      yield* this.#surfaceReply(agent, snapshot, delivery.delivery.id).pipe(Effect.forkIn(this.#scope));
+    else yield* this.#steerWhenBusy(agent, task, snapshot, delivery.delivery.id, true);
     if (!task) {
       this.#emit({ type: "agents-changed", agents: this.listAgents() });
       this.#conversation.emitConversation(snapshot);
@@ -5558,6 +5576,196 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
       },
     };
   }
+
+  /**
+   * Whether a small model without tools may reply to this message before the agent gets to it. A
+   * message with a file or a voice recording, a reply, a slash command, or a typed answer to a card
+   * the agent waits on needs the agent itself.
+   */
+  #surfaceApplies(agent: AgentSummary, input: SendMessageInput, delivery: QueueDelivery): boolean {
+    return (
+      agentSurfaceRepliesEnabled(agent, this.#store.agentDefaults()) &&
+      !this.#stopping &&
+      delivery.attachments.length === 0 &&
+      !input.voiceRecordingDraftId &&
+      delivery.replyToMessageId === null &&
+      delivery.text.trim().length > 0 &&
+      delivery.text.length <= SURFACE_MESSAGE_CHARACTERS &&
+      !delivery.text.startsWith("/") &&
+      !this.#attention.hasAttentionFor(agent.id) &&
+      this.#profileClients.hasSpare()
+    );
+  }
+
+  /**
+   * Replies to a message from the user at once. While the agent works, the reply can end a short
+   * question or move a separate job to a task; anything else, and every failure, goes on as if no
+   * reply had been tried. Runs beside the send, so the sender never waits for the model.
+   */
+  readonly #surfaceReply = Effect.fn("AgentService.surfaceReply")(function* (
+    this: AgentService,
+    agent: AgentSummary,
+    sent: ConversationSnapshot,
+    deliveryId: string,
+  ) {
+    const started = Date.now();
+    const busyTurnId =
+      sent.activeTurnId && sent.activeTurnId !== this.#stoppedTurn(agent.id, null) ? sent.activeTurnId : null;
+    const situation: SurfaceSituation = {
+      busy: busyTurnId !== null,
+      canStartTask:
+        !this.#tasks.oneTurnAtATime(agent.id) && this.#tasks.openTaskIds(agent.id).length < this.#tasks.limit(agent.id),
+      steers:
+        (agent.busyMessageMode ?? this.#busyMessageMode()) === "steer" &&
+        agentProviderDescriptor(providerForAgent(agent)).steer === "native",
+    };
+    const decision = yield* this.#surfaceDecision(agent, sent, deliveryId, busyTurnId, situation);
+    logger.info("Quick reply decided.", {
+      agentId: agent.id,
+      action: decision?.action ?? "fallback",
+      busy: situation.busy,
+      ms: Date.now() - started,
+    });
+    const snapshot = this.#conversation.snapshotToUpdate(agent.id);
+    if (!snapshot || snapshot.threadId !== sent.threadId) return;
+    const handled = decision ? yield* this.#applySurfaceDecision(snapshot, deliveryId, busyTurnId, decision) : false;
+    if (!handled && this.#mailbox.getDelivery(deliveryId)?.delivery.status === "queued")
+      yield* this.#steerWhenBusy(agent, null, snapshot, deliveryId, true);
+  });
+
+  /** The small model's choice, or null when it failed or came too late. */
+  readonly #surfaceDecision = Effect.fn("AgentService.surfaceDecision")(function* (
+    this: AgentService,
+    agent: AgentSummary,
+    sent: ConversationSnapshot,
+    deliveryId: string,
+    busyTurnId: string | null,
+    situation: SurfaceSituation,
+  ) {
+    const generation = Effect.gen({ self: this }, function* () {
+      yield* this.#providers.ensureProvider(agent.provider);
+      const own = backgroundModel(agent, this.#agentModels(agent));
+      const text = this.#mailbox.getDelivery(deliveryId)?.delivery.text;
+      if (!own || text === undefined) return null;
+      const model = withBackgroundEffort(own);
+      const prompt = surfaceReplyPrompt(
+        agent,
+        sent.messages.filter((message) => message.id !== deliveryId),
+        busyTurnId ? runningWorkStatus(sent.messages, busyTurnId) : [],
+        text,
+        situation,
+      );
+      const observe = sideSessionUsageObserver(
+        "surface-reply",
+        this.#store.database.usage,
+        agent.id,
+        agent.provider,
+        model.id,
+      );
+      // The warm client serves only the provider's default account.
+      if (agent.providerAccountId === undefined)
+        return yield* this.#warmGenerations.generate(agent.provider, model, prompt, observe);
+      const client = this.#providers.createProfileClient(agent.provider, agent.providerAccountId);
+      return yield* this.#profileClients.run(client, (cancelled) =>
+        generateTextWithoutTools(client, model, prompt, cancelled, observe),
+      );
+    });
+    // Forked so that the timeout leaves the generation running: stopping it mid-turn costs the warm
+    // client, and the next message would start a new process. A late answer is dropped.
+    const fiber = yield* generation.pipe(
+      Effect.catch((failure) =>
+        Effect.sync(() => {
+          logger.warn("Could not make a quick reply.", { agentId: agent.id, error: failure.cause });
+          return null;
+        }),
+      ),
+      Effect.catchDefect((defect) =>
+        Effect.sync(() => {
+          logger.warn("Could not make a quick reply.", { agentId: agent.id, error: defect });
+          return null;
+        }),
+      ),
+      Effect.forkIn(this.#scope),
+    );
+    const response = Option.getOrNull(yield* Fiber.join(fiber).pipe(Effect.timeoutOption(SURFACE_REPLY_TIMEOUT_MS)));
+    return response === null ? null : parseSurfaceDecision(response, situation);
+  });
+
+  /** Posts the reply. True when the message needs no steer: it was ended or has moved to a task. */
+  readonly #applySurfaceDecision = Effect.fn("AgentService.applySurfaceDecision")(function* (
+    this: AgentService,
+    snapshot: ConversationSnapshot,
+    deliveryId: string,
+    busyTurnId: string | null,
+    decision: SurfaceDecision,
+  ) {
+    const agentId = snapshot.agentId;
+    const delivery = this.#mailbox.getDelivery(deliveryId)?.delivery;
+    if (!delivery) return false;
+    const queued = delivery.status === "queued";
+    const post = (text: string, commentary: boolean, turnId: string | null) => {
+      snapshot.messages.push({
+        id: surfaceLineId(deliveryId),
+        author: "assistant",
+        source: "assistant",
+        text,
+        status: "completed",
+        createdAt: new Date().toISOString(),
+        ...(turnId ? { turnId } : {}),
+        ...(commentary ? { itemType: "commentary" } : {}),
+      });
+      this.#conversation.emitConversation(snapshot, "conversation.surface-reply", { deliveryId });
+    };
+    switch (decision.action) {
+      case "none":
+        return false;
+      case "answer": {
+        // The turn this question was about has ended: the agent answers it in the next one.
+        if (!queued || !busyTurnId || snapshot.activeTurnId !== busyTurnId) return false;
+        const retired = yield* this.#mailbox.answerQueued(deliveryId, busyTurnId).pipe(
+          Effect.map(() => this.#mailbox.getDelivery(deliveryId)?.delivery.status === "completed"),
+          Effect.catch((failure) =>
+            Effect.sync(() => {
+              logger.warn("Could not end a message that a quick reply answered.", { agentId, error: failure.cause });
+              return false;
+            }),
+          ),
+        );
+        if (!retired) return false;
+        this.#mailboxSync.syncDeliveryMessage(snapshot, deliveryId);
+        this.#surfaceNotes.add(agentId, delivery.text, decision.text);
+        post(decision.text, false, busyTurnId);
+        this.#mailboxSync.emitQueue(agentId);
+        return true;
+      }
+      case "task": {
+        if (!queued) return false;
+        const moved = yield* this.runQueuedMessageAsTask({ agentId, deliveryId }).pipe(
+          Effect.as(true),
+          Effect.catch((failure) =>
+            Effect.sync(() => {
+              logger.warn("Could not move a message to a task.", { agentId, error: failure.cause });
+              return false;
+            }),
+          ),
+        );
+        if (moved) post(decision.text, false, snapshot.activeTurnId ?? null);
+        return moved;
+      }
+      case "wait":
+        if (queued) post(decision.text, true, delivery.turnId);
+        return false;
+      case "ack": {
+        const terminal =
+          delivery.status !== "queued" && delivery.status !== "starting" && delivery.status !== "running";
+        const answered =
+          delivery.turnId !== null &&
+          snapshot.messages.some((message) => message.turnId === delivery.turnId && message.author === "assistant");
+        if (!terminal && !answered) post(decision.text, true, delivery.turnId);
+        return false;
+      }
+    }
+  });
 
   /** The turn that the user stopped last in a lane: the agent's own chat, or one task. */
   #stoppedTurn(agentId: string, taskId: string | null): string | null {

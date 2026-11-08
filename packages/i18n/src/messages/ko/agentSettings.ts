@@ -220,6 +220,9 @@ export const messages = {
     "채팅이 길어지면 에이전트가 새 채팅을 시작하도록 허용해요. 먼저 메모를 저장해요.",
   "agentSettings.quickAcknowledgement.title": "긴 작업 전에 계획 표시",
   "agentSettings.quickAcknowledgement.description": "긴 작업 전에 에이전트가 계획을 보여줘요.",
+  "agentSettings.surfaceReplies.title": "작업 중에도 바로 답하기",
+  "agentSettings.surfaceReplies.description":
+    "작은 모델이 메시지에 바로 답하고, 작업 중에는 간단한 질문에 먼저 답해요.",
   "agentSettings.browserProfile.label": "브라우저 프로필",
   "agentSettings.browserProfile.shared": "공유",
   "agentSettings.browserProfile.agent": "이 에이전트만",

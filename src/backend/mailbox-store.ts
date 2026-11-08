@@ -2070,6 +2070,21 @@ export class MailboxStore {
     }
   }, Effect.uninterruptible).bind(this);
 
+  /** Ends a queued message that a quick reply answered, inside the turn that was running. */
+  answerQueued = Effect.fn("MailboxStore.answerQueued")(function* (
+    this: MailboxStore,
+    deliveryId: string,
+    turnId: string,
+  ): Effect.fn.Return<void, StoredStateFailure> {
+    try {
+      this.#assertQueueNotEditing(deliveryId);
+      this.#clearSteerFallback(deliveryId);
+      yield* this.#updateDeliveryEffect(deliveryId, ["queued"], { status: "completed", turnId, error: null });
+    } catch (cause) {
+      return yield* new StoredStateFailure({ cause });
+    }
+  }, Effect.uninterruptible).bind(this);
+
   markRunning = Effect.fn("MailboxStore.markRunning")(function* (
     this: MailboxStore,
     deliveryId: string,

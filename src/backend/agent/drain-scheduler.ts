@@ -28,6 +28,7 @@ import { isPlanLimitDiagnostic } from "./provider-diagnostics";
 import type { ProviderRuntime } from "./provider-runtime";
 import type { RoutineScheduler } from "./routine-scheduler";
 import { sessionSettingsOverrides } from "./session-settings";
+import type { SurfaceNotes } from "./surface-reply";
 import {
   isCodexCompactionRefusal,
   isMissingProviderSessionError,
@@ -148,6 +149,7 @@ export interface DrainSchedulerOptions {
   usageLimits: UsageLimitGate;
   planContinuation: PlanContinuation;
   tasks: TaskLanes;
+  surfaceNotes: SurfaceNotes;
   hooks: DrainHooks;
   channels?: ChannelService;
   messaging?: MessagingThreads;
@@ -181,6 +183,7 @@ export class DrainScheduler {
   readonly #usageLimits: UsageLimitGate;
   readonly #planContinuation: PlanContinuation;
   readonly #tasks: TaskLanes;
+  readonly #surfaceNotes: SurfaceNotes;
   readonly #slots: TurnSlots;
   /** Lanes that a full set of turn slots held back. A drain that may free a slot tries them again. */
   readonly #slotWaiters = new Set<string>();
@@ -229,6 +232,7 @@ export class DrainScheduler {
     this.#usageLimits = options.usageLimits;
     this.#planContinuation = options.planContinuation;
     this.#tasks = options.tasks;
+    this.#surfaceNotes = options.surfaceNotes;
     this.#hooks = options.hooks;
     this.#channels = options.channels;
     this.#messaging = options.messaging;
@@ -831,16 +835,30 @@ export class DrainScheduler {
       const deltaInput = delta ? promptInput(delta.text) : null;
       // The handoff that each start sent: the cleanup after the turn removes only that part.
       const sentHandoffs = new Map<string, string>();
+      // Taken once, as the start below can try a second thread. A block of its own, as a history
+      // reader expects of turn context. A slash command stays first, or a CLI does not read it.
+      const quickReplies =
+        taskId === null &&
+        planNote === undefined &&
+        !channelDelivery &&
+        !messagingDelivery &&
+        !ownSession &&
+        delivery.sender.kind === "user" &&
+        !delivery.text.startsWith("/")
+          ? this.#surfaceNotes.take(delivery.recipientAgentId)
+          : null;
       const inputForThread = (providerThreadId: string) => {
         const input = deltaInput && shortened?.sendsDelta(delivery.id, providerThreadId) ? deltaInput : completeInput;
         const handoff = this.#threads.consumePendingHandoff(providerThreadId);
-        if (!handoff) return input;
-        sentHandoffs.set(providerThreadId, handoff);
-        return input.map((item, index) =>
-          index === 0 && item.type === "text"
-            ? { ...item, text: `${handoff}${CURRENT_MESSAGE_SEPARATOR}${item.text}` }
-            : item,
-        );
+        if (handoff) sentHandoffs.set(providerThreadId, handoff);
+        const sent = handoff
+          ? input.map((item, index) =>
+              index === 0 && item.type === "text"
+                ? { ...item, text: `${handoff}${CURRENT_MESSAGE_SEPARATOR}${item.text}` }
+                : item,
+            )
+          : input;
+        return quickReplies ? [{ type: "text" as const, text: quickReplies }, ...sent] : sent;
       };
 
       for (const { delivery: item } of batch) {

@@ -227,6 +227,9 @@ export const messages = {
     "Sohbeti uzadığında ajanın yeni bir sohbet başlatmasına izin verir. Önce notlarını kaydeder.",
   "agentSettings.quickAcknowledgement.title": "Uzun görevlerden önce planı göster",
   "agentSettings.quickAcknowledgement.description": "Uzun bir görevden önce ajan planını gösterir.",
+  "agentSettings.surfaceReplies.title": "Çalışırken hızlı yanıtla",
+  "agentSettings.surfaceReplies.description":
+    "Küçük bir model mesajlara hemen yanıt verir ve ajan çalışırken kısa soruları yanıtlar.",
   "agentSettings.browserProfile.label": "Tarayıcı profili",
   "agentSettings.browserProfile.shared": "Paylaşılan",
   "agentSettings.browserProfile.agent": "Yalnızca bu ajan",

@@ -287,6 +287,9 @@ export const messages = {
   "agentSettings.agentNewChat.description": "السماح للوكيل ببدء دردشة جديدة عندما تطول دردشته. يحفظ ملاحظات أولًا.",
   "agentSettings.quickAcknowledgement.title": "عرض الخطة قبل المهام الطويلة",
   "agentSettings.quickAcknowledgement.description": "قبل مهمة طويلة، يعرض الوكيل خطته.",
+  "agentSettings.surfaceReplies.title": "الرد السريع أثناء العمل",
+  "agentSettings.surfaceReplies.description":
+    "يرد نموذج صغير على الرسائل فورًا، ويجيب عن الأسئلة القصيرة أثناء عمل الوكيل.",
   "agentSettings.browserProfile.label": "ملف تعريف المتصفح",
   "agentSettings.browserProfile.shared": "مشترك",
   "agentSettings.browserProfile.agent": "هذا الوكيل فقط",

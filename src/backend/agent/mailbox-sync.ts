@@ -14,6 +14,7 @@ import type { OpenBotDatabase } from "../openbot-database";
 import type { ConversationRuntime } from "./conversation-runtime";
 import { conversationContentSignature } from "./delivery-content";
 import type { RoutineScheduler } from "./routine-scheduler";
+import { surfaceLineId } from "./surface-reply";
 
 export interface MailboxSyncHooks {
   emit(event: AgentEvent): void;
@@ -65,7 +66,12 @@ export class MailboxSync {
     // between the request and the continuation's answer.
     const turnId = context.planContinuation?.turnIds[0] ?? context.delivery.turnId;
     if (turnId === null) delete message.turnId;
-    else message.turnId = turnId;
+    else {
+      message.turnId = turnId;
+      // The quick reply to this message stays with it, not after the whole turn.
+      const line = snapshot.messages.find((candidate) => candidate.id === surfaceLineId(deliveryId));
+      if (line) line.turnId = turnId;
+    }
     message.delivery = {
       id: context.delivery.id,
       status: context.delivery.status,

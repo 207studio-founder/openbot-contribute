@@ -63,6 +63,11 @@ export const AGENT_DEFAULT_SETTINGS = [
     title: "agentSettings.quickAcknowledgement.title",
     description: "agentSettings.quickAcknowledgement.description",
   },
+  {
+    key: "surfaceReplies",
+    title: "agentSettings.surfaceReplies.title",
+    description: "agentSettings.surfaceReplies.description",
+  },
   { key: "busyMessageMode", title: "settings.busyMessage.title", description: "settings.busyMessage.description" },
 ] as const satisfies ReadonlyArray<{ key: AgentDefaultSetting; title: AppTextKey; description: AppTextKey }>;
 

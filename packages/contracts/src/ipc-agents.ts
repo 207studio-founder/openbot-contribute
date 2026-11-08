@@ -49,7 +49,12 @@ export function agentComputerUseEnabled(agent: { computerUse?: boolean | undefin
 }
 
 /** The agent settings that have an account default. An agent with no value of its own follows it. */
-export const AGENT_DEFAULT_KEYS = ["allowAutomation", "allowNewChat", "quickAcknowledgement"] as const;
+export const AGENT_DEFAULT_KEYS = [
+  "allowAutomation",
+  "allowNewChat",
+  "quickAcknowledgement",
+  "surfaceReplies",
+] as const;
 export type AgentDefaultKey = (typeof AGENT_DEFAULT_KEYS)[number];
 export type AgentDefaults = Record<AgentDefaultKey, boolean> & {
   /**
@@ -80,6 +85,7 @@ export const DEFAULT_AGENT_DEFAULTS: AgentDefaults = {
   allowAutomation: false,
   allowNewChat: false,
   quickAcknowledgement: false,
+  surfaceReplies: false,
   planStartAfterMs: DEFAULT_PLAN_START_AFTER_MS,
   automationRunsPerHour: DEFAULT_AUTOMATION_RUNS_PER_HOUR,
 };
@@ -129,6 +135,13 @@ export function agentQuickAcknowledgementEnabled(
   defaults: AgentDefaults,
 ): boolean {
   return agent.quickAcknowledgement ?? defaults.quickAcknowledgement;
+}
+
+export function agentSurfaceRepliesEnabled(
+  agent: { surfaceReplies?: boolean | undefined },
+  defaults: AgentDefaults,
+): boolean {
+  return agent.surfaceReplies ?? defaults.surfaceReplies;
 }
 
 /**
@@ -300,6 +313,12 @@ export interface AgentSummary {
    */
   quickAcknowledgement?: boolean;
   /**
+   * Whether a small model without tools replies to the user's messages at once, and answers short
+   * questions while the agent works. Local-only, like `access`. Absent means the account default; see
+   * `agentSurfaceRepliesEnabled`.
+   */
+  surfaceReplies?: boolean;
+  /**
    * Whether the browser tabs of the agent use a session of their own, with their own cookies and
    * sign-ins. Local-only, like `access`. Absent means off: the tabs use the shared session. When
    * `browserProfileId` is also set, the named profile applies; see `agentBrowserProfile`.
@@ -408,6 +427,7 @@ function hasAgentSummaryFields(value: DynamicRecord): boolean {
     (value.allowAutomation === undefined || isBoolean(value.allowAutomation)) &&
     (value.allowNewChat === undefined || isBoolean(value.allowNewChat)) &&
     (value.quickAcknowledgement === undefined || isBoolean(value.quickAcknowledgement)) &&
+    (value.surfaceReplies === undefined || isBoolean(value.surfaceReplies)) &&
     (value.ownBrowserSession === undefined || isBoolean(value.ownBrowserSession)) &&
     (value.browserProfileId === undefined || isBrowserProfileId(value.browserProfileId)) &&
     (value.fastMode === undefined || isBoolean(value.fastMode)) &&
@@ -470,6 +490,7 @@ export interface UpdateAgentInput {
   allowAutomation?: boolean | null;
   allowNewChat?: boolean | null;
   quickAcknowledgement?: boolean | null;
+  surfaceReplies?: boolean | null;
   fastMode?: boolean;
   /** `null` returns the agent to the app default. */
   busyMessageMode?: BusyMessageMode | null;

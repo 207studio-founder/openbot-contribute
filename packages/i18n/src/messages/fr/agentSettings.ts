@@ -236,6 +236,9 @@ export const messages = {
     "L’agent peut démarrer une nouvelle discussion quand la sienne devient longue. Il enregistre d’abord des notes.",
   "agentSettings.quickAcknowledgement.title": "Montrer le plan avant les longues tâches",
   "agentSettings.quickAcknowledgement.description": "Avant une longue tâche, l’agent montre son plan.",
+  "agentSettings.surfaceReplies.title": "Répondre vite pendant le travail",
+  "agentSettings.surfaceReplies.description":
+    "Un petit modèle répond aussitôt aux messages et aux questions courtes pendant que l’agent travaille.",
   "agentSettings.browserProfile.label": "Profil de navigateur",
   "agentSettings.browserProfile.shared": "Partagé",
   "agentSettings.browserProfile.agent": "Cet agent uniquement",

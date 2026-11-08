@@ -100,6 +100,8 @@ type PersistedStoredAgent = Omit<StoredAgent, "avatarUrl" | "provider" | "access
   allowNewChat?: boolean;
   // Absent means the account default, which is off until the user changes it in Settings › Agents.
   quickAcknowledgement?: boolean;
+  // Absent means the account default, which is off until the user changes it in Settings › Agents.
+  surfaceReplies?: boolean;
   // Absent on every agent stored before the setting existed, which keeps its tabs in the shared browser session.
   ownBrowserSession?: boolean;
   // Absent on every agent stored before named browser profiles existed. Stored with
@@ -775,6 +777,11 @@ export class AgentStore {
         if (!isBoolean(input.quickAcknowledgement)) throw new Error("Invalid quick acknowledgement value.");
         next.quickAcknowledgement = input.quickAcknowledgement;
       }
+      if (input.surfaceReplies === null) delete next.surfaceReplies;
+      else if (input.surfaceReplies !== undefined) {
+        if (!isBoolean(input.surfaceReplies)) throw new Error("Invalid quick replies value.");
+        next.surfaceReplies = input.surfaceReplies;
+      }
       if (input.ownBrowserSession !== undefined) {
         if (!isBoolean(input.ownBrowserSession)) throw new Error("Invalid browser session value.");
         next.ownBrowserSession = input.ownBrowserSession;
@@ -885,6 +892,7 @@ export class AgentStore {
       if (next.allowAutomation === undefined) delete agent.allowAutomation;
       if (next.allowNewChat === undefined) delete agent.allowNewChat;
       if (next.quickAcknowledgement === undefined) delete agent.quickAcknowledgement;
+      if (next.surfaceReplies === undefined) delete agent.surfaceReplies;
       if (next.avatarColor === undefined) delete agent.avatarColor;
       if (next.chatColor === undefined) delete agent.chatColor;
       try {
@@ -903,6 +911,7 @@ export class AgentStore {
         if (previous.allowAutomation === undefined) delete agent.allowAutomation;
         if (previous.allowNewChat === undefined) delete agent.allowNewChat;
         if (previous.quickAcknowledgement === undefined) delete agent.quickAcknowledgement;
+        if (previous.surfaceReplies === undefined) delete agent.surfaceReplies;
         if (previous.avatarColor === undefined) delete agent.avatarColor;
         if (previous.chatColor === undefined) delete agent.chatColor;
         throw error;
@@ -1928,6 +1937,7 @@ function isStoredAgent(value: unknown): value is PersistedStoredAgent {
     (record.allowAutomation === undefined || isBoolean(record.allowAutomation)) &&
     (record.allowNewChat === undefined || isBoolean(record.allowNewChat)) &&
     (record.quickAcknowledgement === undefined || isBoolean(record.quickAcknowledgement)) &&
+    (record.surfaceReplies === undefined || isBoolean(record.surfaceReplies)) &&
     (record.ownBrowserSession === undefined || isBoolean(record.ownBrowserSession)) &&
     (record.browserProfileId === undefined || isBrowserProfileId(record.browserProfileId)) &&
     (record.fastMode === undefined || isBoolean(record.fastMode)) &&
@@ -2016,6 +2026,10 @@ function readStoredAgent(value: unknown): ReadStoredAgent | UnreadableStoredAgen
     value.quickAcknowledgement === undefined || isBoolean(value.quickAcknowledgement)
       ? value.quickAcknowledgement
       : reset("quickAcknowledgement", undefined);
+  const surfaceReplies =
+    value.surfaceReplies === undefined || isBoolean(value.surfaceReplies)
+      ? value.surfaceReplies
+      : reset("surfaceReplies", undefined);
   const ownBrowserSession =
     value.ownBrowserSession === undefined || isBoolean(value.ownBrowserSession)
       ? value.ownBrowserSession
@@ -2115,6 +2129,7 @@ function readStoredAgent(value: unknown): ReadStoredAgent | UnreadableStoredAgen
     ...(allowAutomation === undefined ? {} : { allowAutomation }),
     ...(allowNewChat === undefined ? {} : { allowNewChat }),
     ...(quickAcknowledgement === undefined ? {} : { quickAcknowledgement }),
+    ...(surfaceReplies === undefined ? {} : { surfaceReplies }),
     ...(ownBrowserSession === undefined ? {} : { ownBrowserSession }),
     ...(browserProfileId === undefined ? {} : { browserProfileId }),
     ...(fastMode === undefined ? {} : { fastMode }),

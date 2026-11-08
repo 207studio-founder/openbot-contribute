@@ -2555,12 +2555,13 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
           allowAutomation,
           allowNewChat,
           quickAcknowledgement,
+          surfaceReplies,
           chatColor,
           ...updates
         } = input;
         const updated: ClientAgentSummary = { ...current, ...updates };
         // `null` returns the agent to the account default, which an agent records by having no value.
-        const flags = { allowAutomation, allowNewChat, quickAcknowledgement };
+        const flags = { allowAutomation, allowNewChat, quickAcknowledgement, surfaceReplies };
         for (const key of AGENT_DEFAULT_KEYS) {
           const flag = flags[key];
           if (flag === null) delete updated[key];

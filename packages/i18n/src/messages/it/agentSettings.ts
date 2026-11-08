@@ -234,6 +234,9 @@ export const messages = {
     "L'agente può avviare una nuova chat quando la sua diventa lunga. Prima salva delle note.",
   "agentSettings.quickAcknowledgement.title": "Mostra il piano prima delle attività lunghe",
   "agentSettings.quickAcknowledgement.description": "Prima di un'attività lunga, l'agente mostra il suo piano.",
+  "agentSettings.surfaceReplies.title": "Rispondi subito durante il lavoro",
+  "agentSettings.surfaceReplies.description":
+    "Un modello piccolo risponde subito ai messaggi e alle domande brevi mentre l'agente lavora.",
   "agentSettings.browserProfile.label": "Profilo del browser",
   "agentSettings.browserProfile.shared": "Condiviso",
   "agentSettings.browserProfile.agent": "Solo questo agente",

@@ -22,6 +22,7 @@ import { type DrainScheduler, REMOVED_ENDPOINT_MESSAGE } from "./drain-scheduler
 import type { MailboxSync } from "./mailbox-sync";
 import type { ProviderRuntime } from "./provider-runtime";
 import type { RoutineScheduler } from "./routine-scheduler";
+import { surfaceLineId } from "./surface-reply";
 import { providerForAgent } from "./thread-items";
 
 export interface QueueControlsHooks {
@@ -88,6 +89,13 @@ export class QueueControls {
     const sender = this.#mailbox.getDelivery(deliveryId)?.delivery.sender;
     yield* this.#mailbox.cancel(agentId, deliveryId).pipe(toQueueOperationFailed);
     this.#mailboxSync.emitQueue(agentId);
+    // The quick reply that said this message waits has nothing to say any more.
+    const snapshot = this.#conversation.snapshotToUpdate(agentId);
+    const line = snapshot?.messages.findIndex((message) => message.id === surfaceLineId(deliveryId)) ?? -1;
+    if (snapshot && line >= 0) {
+      snapshot.messages.splice(line, 1);
+      this.#conversation.emitConversation(snapshot, "queue.message-updated");
+    }
     this.#drain.scheduleDrain(agentId);
     // The requester may hold the other answers until this request ends.
     if (sender?.kind === "agent") this.#drain.scheduleDrain(sender.agentId);
@@ -328,10 +336,10 @@ export class QueueControls {
       if (
         this.#conversation.isExecutionThread(snapshot.threadId) &&
         !snapshot.messages.some((message) => message.id === input.deliveryId)
-      ) {
+      )
         snapshot.messages.push(promptMessage(context, { ...context.delivery, turnId }));
-        this.#mailboxSync.syncDeliveryMessage(snapshot, input.deliveryId);
-      }
+      // Before the sort below: the message's quick reply joins this turn too.
+      this.#mailboxSync.syncDeliveryMessage(snapshot, input.deliveryId);
       this.#mailboxSync.syncMailboxMessages(snapshot);
       this.#mailboxSync.emitQueue(agent.id);
       this.#conversation.emitConversation(snapshot, "queue.message-steered", { deliveryId: input.deliveryId });
